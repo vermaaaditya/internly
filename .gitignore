@@ -1,0 +1,11 @@
+# Backend dependencies & secrets
+node_modules/
+.env
+*.log
+.system_generated/
+
+# Frontend (dashboard) dependencies, build output, & secrets
+dashboard/node_modules/
+dashboard/dist/
+dashboard/.env
+dashboard/.env.local
