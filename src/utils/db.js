@@ -49,22 +49,45 @@ async function upsertListings(listings) {
     return { inserted: 0, errors: [] };
   }
 
+  // Fetch existing listings to preserve their IDs and avoid foreign key constraint violations
+  const urlToIdMap = new Map();
+  try {
+    const { data: existingListings, error: fetchErr } = await supabase
+      .from('listings')
+      .select('id, apply_url');
+    
+    if (fetchErr) {
+      logger.error('Failed to fetch existing listings for ID mapping:', fetchErr);
+    } else if (existingListings) {
+      existingListings.forEach(row => {
+        if (row.apply_url) {
+          urlToIdMap.set(row.apply_url, row.id);
+        }
+      });
+    }
+  } catch (fetchErr) {
+    logger.error('Exception while fetching existing listings:', fetchErr);
+  }
+
   // Map from the normalized JS schema to the snake_case DB columns
-  const rows = listings.map(l => ({
-    id:           l.id,
-    title:        l.title,
-    company:      l.company,
-    stipend:      l.stipend,
-    duration:     l.duration || null,
-    posted_date:  l.postedDate || null,
-    apply_url:    l.applyUrl,
-    skills:       l.skills || [],
-    is_remote:    l.isRemote,
-    source:       l.source,
-    score:        l.score || 0,
-    shortlisted:  l.shortlisted || false,
-    scraped_at:   l.scrapedAt || new Date().toISOString()
-  }));
+  const rows = listings.map(l => {
+    const existingId = urlToIdMap.get(l.applyUrl);
+    return {
+      id:           existingId || l.id,
+      title:        l.title,
+      company:      l.company,
+      stipend:      l.stipend,
+      duration:     l.duration || null,
+      posted_date:  l.postedDate || null,
+      apply_url:    l.applyUrl,
+      skills:       l.skills || [],
+      is_remote:    l.isRemote,
+      source:       l.source,
+      score:        l.score || 0,
+      shortlisted:  l.shortlisted || false,
+      scraped_at:   l.scrapedAt || new Date().toISOString()
+    };
+  });
 
   const errors = [];
 
