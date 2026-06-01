@@ -6,6 +6,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const config = require('../config');
 const logger = require('./logger');
+const { generateEmbedding } = require('./embed');
 
 // ── Initialize Supabase Client ──────────────────────────────────────────────
 let supabase = null;
@@ -50,18 +51,18 @@ async function upsertListings(listings) {
   }
 
   // Fetch existing listings to preserve their IDs and avoid foreign key constraint violations
-  const urlToIdMap = new Map();
+  const urlToRowMap = new Map();
   try {
     const { data: existingListings, error: fetchErr } = await supabase
       .from('listings')
-      .select('id, apply_url');
+      .select('id, apply_url, embedding, description');
     
     if (fetchErr) {
       logger.error('Failed to fetch existing listings for ID mapping:', fetchErr);
     } else if (existingListings) {
       existingListings.forEach(row => {
         if (row.apply_url) {
-          urlToIdMap.set(row.apply_url, row.id);
+          urlToRowMap.set(row.apply_url, row);
         }
       });
     }
@@ -71,9 +72,9 @@ async function upsertListings(listings) {
 
   // Map from the normalized JS schema to the snake_case DB columns
   const rows = listings.map(l => {
-    const existingId = urlToIdMap.get(l.applyUrl);
+    const existingRow = urlToRowMap.get(l.applyUrl);
     return {
-      id:           existingId || l.id,
+      id:           existingRow ? existingRow.id : l.id,
       title:        l.title,
       company:      l.company,
       stipend:      l.stipend,
@@ -85,9 +86,29 @@ async function upsertListings(listings) {
       source:       l.source,
       score:        l.score || 0,
       shortlisted:  l.shortlisted || false,
-      scraped_at:   l.scrapedAt || new Date().toISOString()
+      scraped_at:   l.scrapedAt || new Date().toISOString(),
+      description:  l.description || existingRow?.description || null,
+      embedding:    existingRow ? existingRow.embedding : null
     };
   });
+
+  // Batch generate embeddings for listings that do not have them yet
+  const rowsToEmbed = rows.filter(r => r.embedding === null);
+  if (rowsToEmbed.length > 0) {
+    logger.info(`Generating semantic embeddings for ${rowsToEmbed.length} new/un-embedded listings...`);
+    const BATCH_SIZE_EMBED = 5;
+    for (let i = 0; i < rowsToEmbed.length; i += BATCH_SIZE_EMBED) {
+      const chunk = rowsToEmbed.slice(i, i + BATCH_SIZE_EMBED);
+      await Promise.all(chunk.map(async (row) => {
+        const inputText = `${row.title} ${row.company} ${row.description || ''}`;
+        row.embedding = await generateEmbedding(inputText);
+      }));
+      // Pause slightly between batches to be friendly to Hugging Face
+      if (i + BATCH_SIZE_EMBED < rowsToEmbed.length) {
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+    }
+  }
 
   const errors = [];
 

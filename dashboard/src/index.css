@@ -501,3 +501,103 @@ button, input, select {
   z-index: -1;
   background-color: #000;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   8. MY RESUME COLLAPSIBLE SIDEBAR & MATCH TOOLTIPS
+   ────────────────────────────────────────────────────────────────────────── */
+
+.brutal-resume-sidebar {
+  width: 320px;
+  background-color: var(--brutal-cream);
+  border: var(--brutal-border);
+  box-shadow: var(--brutal-shadow);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow-y: auto;
+  max-height: 85vh;
+  margin-right: 24px;
+}
+
+.brutal-resume-sidebar.collapsed {
+  width: 60px;
+  padding: 10px;
+  align-items: center;
+  overflow: hidden;
+  margin-right: 12px;
+}
+
+.brutal-resume-textarea {
+  width: 100%;
+  height: 240px;
+  padding: 12px;
+  border: var(--brutal-border-thin);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  resize: vertical;
+  outline: none;
+  background-color: #ffffff;
+}
+
+.brutal-resume-textarea:focus {
+  background-color: #fffbeb;
+  box-shadow: 2px 2px 0px #000;
+}
+
+/* Match Badges & Tooltips */
+.brutal-match-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: var(--brutal-border-thin);
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: help;
+  position: relative;
+  align-self: flex-start;
+  box-shadow: 2px 2px 0px #000;
+}
+
+.brutal-match-badge:hover .brutal-match-tooltip {
+  display: block;
+}
+
+.brutal-match-tooltip {
+  display: none;
+  position: absolute;
+  bottom: 125%;
+  left: 0;
+  background-color: #ffffff;
+  border: var(--brutal-border-thin);
+  box-shadow: 4px 4px 0px #000;
+  padding: 14px;
+  width: 280px;
+  z-index: 1000;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: #000000;
+  text-align: left;
+  line-height: 1.4;
+}
+
+/* Sidebar Toggle Button */
+.brutal-sidebar-toggle {
+  background-color: var(--brutal-pink);
+  border: var(--brutal-border-thin);
+  box-shadow: 2px 2px 0px #000;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 6px 12px;
+  font-size: 12px;
+  align-self: flex-start;
+  text-transform: uppercase;
+}
+
+.brutal-sidebar-toggle:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 3px 3px 0px #000;
+}

@@ -85,7 +85,7 @@ const MOCK_LISTINGS = [
 ];
 
 // ── Card Component ───────────────────────────────────────────────────────────
-function ListingCard({ listing, onStatusChange, onDelete }) {
+function ListingCard({ listing, onStatusChange, onDelete, matchData }) {
   const stipendDisplay = listing.stipend > 0
     ? `₹${listing.stipend.toLocaleString('en-IN')}/month`
     : 'Stipend Not Listed';
@@ -152,6 +152,25 @@ function ListingCard({ listing, onStatusChange, onDelete }) {
           ))}
         </div>
       )}
+
+      {/* ATS Match Score Badge with Hover Tooltip */}
+      {matchData && (
+        <div 
+          className="brutal-match-badge"
+          style={{
+            backgroundColor: matchData.score >= 70 ? 'var(--brutal-green)' : matchData.score >= 40 ? 'var(--brutal-yellow)' : 'var(--brutal-red)',
+            marginTop: '8px'
+          }}
+        >
+          🎯 MATCH: {matchData.score}%
+          <div className="brutal-match-tooltip">
+            <p style={{ fontWeight: '900', borderBottom: '2px solid #000', paddingBottom: '4px', marginBottom: '8px', textTransform: 'uppercase' }}>🎯 ATS MATCH REPORT</p>
+            <p style={{ marginBottom: '6px' }}>✅ <strong>MATCHING:</strong> {matchData.gapAnalysis.matchingSkills.join(', ') || 'None'}</p>
+            <p style={{ marginBottom: '8px' }}>❌ <strong>MISSING:</strong> {matchData.gapAnalysis.missingSkills.join(', ') || 'None'}</p>
+            <p style={{ fontWeight: '800', borderTop: '1px dashed #000', paddingTop: '6px', marginTop: '6px', fontStyle: 'italic' }}>💬 {matchData.gapAnalysis.verdict}</p>
+          </div>
+        </div>
+      )}
       
       {/* Actions (Apply + Status Selector) */}
       <div className="brutal-card-actions">
@@ -194,6 +213,60 @@ export default function InternTracker() {
   const [shortlistedOnly, setShortlistedOnly] = useState(true);
   const [sortBy, setSortBy] = useState('score');
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // AI and ATS Scorer State Variables
+  const [resumeText, setResumeText] = useState(() => localStorage.getItem('my_resume') || '');
+  const [matchScores, setMatchScores] = useState(() => {
+    try {
+      const cached = localStorage.getItem('match_scores');
+      return cached ? JSON.parse(cached) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [isBatchScoring, setIsBatchScoring] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [semanticResults, setSemanticResults] = useState(null);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Sync match scores to localStorage
+  useEffect(() => {
+    localStorage.setItem('match_scores', JSON.stringify(matchScores));
+  }, [matchScores]);
+
+  // Debounced Semantic Search Hook (400ms)
+  useEffect(() => {
+    if (!search.trim()) {
+      setSemanticResults(null);
+      return;
+    }
+
+    setIsSearching(true);
+    const delayDebounceFn = setTimeout(async () => {
+      try {
+        const apiURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        const response = await fetch(`${apiURL}/api/search`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: search })
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setSemanticResults(data.results || []);
+        } else {
+          console.error("Semantic search failed with status:", response.status);
+          setSemanticResults([]);
+        }
+      } catch (err) {
+        console.error("Semantic search failed:", err);
+        setSemanticResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [search]);
 
   // Fetch listings from Supabase on mount
   const fetchListings = useCallback(async () => {
@@ -328,16 +401,25 @@ export default function InternTracker() {
 
   // Filter & Sort Pipeline
   const filteredListings = useMemo(() => {
-    let result = [...listings];
+    let result = [];
 
-    // Search filter
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(l => 
-        l.title.toLowerCase().includes(q) ||
-        l.company.toLowerCase().includes(q) ||
-        (l.skills || []).some(s => s.toLowerCase().includes(q))
-      );
+    if (search.trim() && semanticResults !== null) {
+      // Use semantic search results merged with local application status
+      result = semanticResults.map(l => ({
+        ...l,
+        application_status: listings.find(orig => orig.id === l.id)?.application_status || 'pending'
+      }));
+    } else {
+      // Use local state listings
+      result = [...listings];
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        result = result.filter(l => 
+          l.title.toLowerCase().includes(q) ||
+          l.company.toLowerCase().includes(q) ||
+          (l.skills || []).some(s => s.toLowerCase().includes(q))
+        );
+      }
     }
 
     // Shortlisted toggle filter
@@ -346,16 +428,80 @@ export default function InternTracker() {
     }
 
     // Sorting
-    if (sortBy === 'score') {
-      result.sort((a, b) => b.score - a.score);
-    } else if (sortBy === 'stipend') {
+    if (sortBy === 'stipend') {
       result.sort((a, b) => (b.stipend || 0) - (a.stipend || 0));
     } else if (sortBy === 'date') {
       result.sort((a, b) => new Date(b.scraped_at) - new Date(a.scraped_at));
+    } else if (sortBy === 'score') {
+      // If semanticResults are active, they are already ranked by similarity.
+      // We only sort by listing.score if we are NOT in active semantic search.
+      if (!search.trim() || semanticResults === null) {
+        result.sort((a, b) => b.score - a.score);
+      }
     }
 
     return result;
-  }, [listings, search, shortlistedOnly, sortBy]);
+  }, [listings, search, semanticResults, shortlistedOnly, sortBy]);
+
+  // Batch scoring logic for ATS compatibility match
+  const handleBatchScore = useCallback(async () => {
+    if (!resumeText.trim()) return;
+    setIsBatchScoring(true);
+    
+    // Score the listings currently visible on the board
+    const listingsToScore = filteredListings;
+    
+    if (listingsToScore.length === 0) {
+      setIsBatchScoring(false);
+      return;
+    }
+
+    const delay = (ms) => new Promise(r => setTimeout(r, ms));
+    const BATCH_SIZE = 3;
+    const newScores = {};
+
+    try {
+      for (let i = 0; i < listingsToScore.length; i += BATCH_SIZE) {
+        const batch = listingsToScore.slice(i, i + BATCH_SIZE);
+        
+        await Promise.all(batch.map(async (l) => {
+          try {
+            const apiURL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+            const textToScore = l.description || `${l.title} at ${l.company}. Skills required: ${(l.skills || []).join(', ')}`;
+            
+            const response = await fetch(`${apiURL}/api/match`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                resume: resumeText,
+                description: textToScore
+              })
+            });
+
+            if (response.ok) {
+              const data = await response.json();
+              newScores[l.id] = data;
+            }
+          } catch (err) {
+            console.error(`Error scoring listing ${l.id}:`, err);
+          }
+        }));
+
+        if (i + BATCH_SIZE < listingsToScore.length) {
+          await delay(500); // 500ms delay between batches to respect free tier rate limit
+        }
+      }
+
+      setMatchScores(prev => ({
+        ...prev,
+        ...newScores
+      }));
+    } catch (err) {
+      console.error("Batch scoring encountered an error:", err);
+    } finally {
+      setIsBatchScoring(false);
+    }
+  }, [filteredListings, resumeText]);
 
   // Grouped columns for Kanban
   const kanbanGroups = useMemo(() => {
@@ -423,14 +569,26 @@ export default function InternTracker() {
             The Ultimate No-Bullshit Dev Internship Tracker
           </p>
         </div>
-        <button 
-          onClick={fetchListings}
-          className="brutal-btn brutal-btn-sync"
-          disabled={isRefreshing}
-          id="sync-pipeline-btn"
-        >
-          {isRefreshing ? '🔄 FETCHING...' : '🔄 REFRESH STATS'}
-        </button>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <button 
+            onClick={handleBatchScore}
+            className="brutal-btn"
+            style={{ backgroundColor: 'var(--brutal-sky)' }}
+            disabled={isBatchScoring || !resumeText.trim()}
+            title="Batch-score all visible listings using zero-shot classification against your resume"
+            id="analyze-board-btn"
+          >
+            {isBatchScoring ? '⚡ ANALYZING...' : '⚡ ANALYZE BOARD'}
+          </button>
+          <button 
+            onClick={fetchListings}
+            className="brutal-btn brutal-btn-sync"
+            disabled={isRefreshing}
+            id="sync-pipeline-btn"
+          >
+            {isRefreshing ? '🔄 FETCHING...' : '🔄 REFRESH STATS'}
+          </button>
+        </div>
       </header>
 
       {/* Metrics Row */}
@@ -458,11 +616,12 @@ export default function InternTracker() {
         <div className="brutal-search-wrapper">
           <input 
             type="text" 
-            placeholder="🔍 SEARCH ROLES, COMPANIES, OR KEYWORD TAGS..." 
+            placeholder={isSearching ? "⏳ SEARCHING SEMANTICALLY..." : "🔍 SEARCH ROLES, COMPANIES, OR KEYWORD TAGS..."} 
             className="brutal-input"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             id="search-input"
+            style={{ border: isSearching ? '4px solid var(--brutal-yellow)' : 'var(--brutal-border)' }}
           />
         </div>
         <div className="brutal-filters">
@@ -491,47 +650,110 @@ export default function InternTracker() {
         </div>
       </section>
 
-      {/* Kanban Board Container */}
-      <main className="brutal-board-container">
-        {COLUMNS.map(col => {
-          const colListings = kanbanGroups[col.key] || [];
-          return (
-            <div 
-              key={col.key} 
-              className="brutal-column"
-              style={{ borderTop: `16px solid ${col.color}` }}
+      {/* Layout Flex Wrapper for Sidebar + Board */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', position: 'relative', width: '100%' }}>
+        
+        {/* Collapsible Resume Sidebar */}
+        <aside className={`brutal-resume-sidebar ${isSidebarOpen ? '' : 'collapsed'}`}>
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            width: '100%', 
+            borderBottom: isSidebarOpen ? '2px solid #000' : 'none', 
+            paddingBottom: isSidebarOpen ? '8px' : '0' 
+          }}>
+            {isSidebarOpen && <h2 style={{ fontSize: '18px', margin: 0 }}>📄 MY RESUME</h2>}
+            <button 
+              onClick={() => setIsSidebarOpen(prev => !prev)}
+              className="brutal-sidebar-toggle"
+              style={{ width: isSidebarOpen ? 'auto' : '100%', display: 'flex', justifyContent: 'center' }}
             >
-              {/* Column Header */}
-              <div className="brutal-column-header">
-                <span className="brutal-column-title">
-                  {col.emoji} {col.label}
-                </span>
-                <span className="brutal-column-count">
-                  {colListings.length}
-                </span>
-              </div>
-              
-              {/* Column Body */}
-              <div className="brutal-column-body">
-                {colListings.length === 0 ? (
-                  <div className="brutal-empty-state">
-                    ⛔ COLUMN IS EMPTY // GET SCRAPING OR ADJUST FILTERS ⛔
-                  </div>
-                ) : (
-                  colListings.map(listing => (
-                    <ListingCard 
-                      key={listing.id}
-                      listing={listing}
-                      onStatusChange={handleStatusChange}
-                      onDelete={handleDeleteListing}
-                    />
-                  ))
-                )}
-              </div>
+              {isSidebarOpen ? '◀' : '📄'}
+            </button>
+          </div>
+          
+          {isSidebarOpen ? (
+            <>
+              <p style={{ fontSize: '12px', fontWeight: '800', fontStyle: 'italic', marginTop: '8px' }}>
+                Paste your resume text here to analyze ATS keyword match score & skill gaps against scraped roles!
+              </p>
+              <textarea 
+                className="brutal-resume-textarea"
+                placeholder="Paste your plain text resume here..."
+                value={resumeText}
+                onChange={(e) => {
+                  setResumeText(e.target.value);
+                  localStorage.setItem('my_resume', e.target.value);
+                }}
+              />
+              <button 
+                onClick={handleBatchScore}
+                className="brutal-btn"
+                style={{ width: '100%', backgroundColor: 'var(--brutal-yellow)' }}
+                disabled={isBatchScoring || !resumeText.trim()}
+              >
+                {isBatchScoring ? '⚡ MATCHING...' : '⚡ MATCH RESUME'}
+              </button>
+            </>
+          ) : (
+            <div style={{ 
+              writingMode: 'vertical-rl', 
+              textTransform: 'uppercase', 
+              fontWeight: '900', 
+              fontSize: '14px', 
+              paddingTop: '12px', 
+              fontFamily: 'var(--font-mono)', 
+              color: '#666' 
+            }}>
+              📄 RESUME DRAWER
             </div>
-          );
-        })}
-      </main>
+          )}
+        </aside>
+
+        {/* Kanban Board Container */}
+        <main className="brutal-board-container" style={{ flex: 1 }}>
+          {COLUMNS.map(col => {
+            const colListings = kanbanGroups[col.key] || [];
+            return (
+              <div 
+                key={col.key} 
+                className="brutal-column"
+                style={{ borderTop: `16px solid ${col.color}` }}
+              >
+                {/* Column Header */}
+                <div className="brutal-column-header">
+                  <span className="brutal-column-title">
+                    {col.emoji} {col.label}
+                  </span>
+                  <span className="brutal-column-count">
+                    {colListings.length}
+                  </span>
+                </div>
+                
+                {/* Column Body */}
+                <div className="brutal-column-body">
+                  {colListings.length === 0 ? (
+                    <div className="brutal-empty-state">
+                      ⛔ COLUMN IS EMPTY // GET SCRAPING OR ADJUST FILTERS ⛔
+                    </div>
+                  ) : (
+                    colListings.map(listing => (
+                      <ListingCard 
+                        key={listing.id}
+                        listing={listing}
+                        onStatusChange={handleStatusChange}
+                        onDelete={handleDeleteListing}
+                        matchData={matchScores[listing.id]}
+                      />
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </main>
+      </div>
     </div>
   );
 }
