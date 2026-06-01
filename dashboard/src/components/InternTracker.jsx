@@ -214,8 +214,39 @@ export default function InternTracker() {
   const [sortBy, setSortBy] = useState('score');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // AI and ATS Scorer State Variables
-  const [resumeText, setResumeText] = useState(() => localStorage.getItem('my_resume') || '');
+  // AI, ATS and Navigation State Variables
+  const [currentTab, setCurrentTab] = useState('board'); // 'board' or 'ats'
+  const [documentJar, setDocumentJar] = useState(() => {
+    try {
+      const cached = localStorage.getItem('document_jar');
+      if (cached) return JSON.parse(cached);
+    } catch (e) {
+      console.error(e);
+    }
+    // Default fallback resumes to seed the jar
+    return [
+      { 
+        id: 'doc-1', 
+        title: 'React Developer Resume', 
+        content: `Aaditya Verma\nSoftware Engineering Intern\nSkills: React, JavaScript, TypeScript, CSS Grid, Tailwind, HTML, Node.js, Express, MongoDB, Git`
+      },
+      { 
+        id: 'doc-2', 
+        title: 'Python Backend Resume', 
+        content: `Aaditya Verma\nBackend Developer Intern\nSkills: Python, Django, Flask, FastAPI, PostgreSQL, SQL, MongoDB, AWS, Docker, Kubernetes, Git`
+      }
+    ];
+  });
+  const [activeDocId, setActiveDocId] = useState(() => {
+    return localStorage.getItem('active_doc_id') || 'doc-1';
+  });
+  const [newDocTitle, setNewDocTitle] = useState('');
+  const [newDocContent, setNewDocContent] = useState('');
+  const [isAddingDoc, setIsAddingDoc] = useState(false);
+  const [editingDocId, setEditingDocId] = useState(null);
+  const [editDocTitle, setEditDocTitle] = useState('');
+  const [editDocContent, setEditDocContent] = useState('');
+
   const [matchScores, setMatchScores] = useState(() => {
     try {
       const cached = localStorage.getItem('match_scores');
@@ -229,10 +260,25 @@ export default function InternTracker() {
   const [semanticResults, setSemanticResults] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
 
+  // Sync document jar and active document to localStorage
+  useEffect(() => {
+    localStorage.setItem('document_jar', JSON.stringify(documentJar));
+  }, [documentJar]);
+
+  useEffect(() => {
+    localStorage.setItem('active_doc_id', activeDocId);
+  }, [activeDocId]);
+
   // Sync match scores to localStorage
   useEffect(() => {
     localStorage.setItem('match_scores', JSON.stringify(matchScores));
   }, [matchScores]);
+
+  // Dynamically compute active resume text from selected jar item
+  const activeResumeText = useMemo(() => {
+    const doc = documentJar.find(d => d.id === activeDocId);
+    return doc ? doc.content : '';
+  }, [documentJar, activeDocId]);
 
   // Debounced Semantic Search Hook (400ms)
   useEffect(() => {
@@ -445,7 +491,7 @@ export default function InternTracker() {
 
   // Batch scoring logic for ATS compatibility match
   const handleBatchScore = useCallback(async () => {
-    if (!resumeText.trim()) return;
+    if (!activeResumeText.trim()) return;
     setIsBatchScoring(true);
     
     // Score the listings currently visible on the board
@@ -473,7 +519,7 @@ export default function InternTracker() {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
-                resume: resumeText,
+                resume: activeResumeText,
                 description: textToScore
               })
             });
@@ -501,7 +547,7 @@ export default function InternTracker() {
     } finally {
       setIsBatchScoring(false);
     }
-  }, [filteredListings, resumeText]);
+  }, [filteredListings, activeResumeText]);
 
   // Grouped columns for Kanban
   const kanbanGroups = useMemo(() => {
@@ -571,16 +617,6 @@ export default function InternTracker() {
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button 
-            onClick={handleBatchScore}
-            className="brutal-btn"
-            style={{ backgroundColor: 'var(--brutal-sky)' }}
-            disabled={isBatchScoring || !resumeText.trim()}
-            title="Batch-score all visible listings using zero-shot classification against your resume"
-            id="analyze-board-btn"
-          >
-            {isBatchScoring ? '⚡ ANALYZING...' : '⚡ ANALYZE BOARD'}
-          </button>
-          <button 
             onClick={fetchListings}
             className="brutal-btn brutal-btn-sync"
             disabled={isRefreshing}
@@ -591,169 +627,499 @@ export default function InternTracker() {
         </div>
       </header>
 
-      {/* Metrics Row */}
-      <section className="brutal-stats-grid">
-        <div className="brutal-stat-card" style={{ backgroundColor: 'var(--brutal-sky)' }}>
-          <span className="brutal-stat-label">📁 TOTAL SCRAPED</span>
-          <span className="brutal-stat-value">{stats.totalCount}</span>
-        </div>
-        <div className="brutal-stat-card" style={{ backgroundColor: 'var(--brutal-yellow)' }}>
-          <span className="brutal-stat-label">⭐ SHORTLISTED</span>
-          <span className="brutal-stat-value">{stats.shortlistedCount}</span>
-        </div>
-        <div className="brutal-stat-card" style={{ backgroundColor: 'var(--brutal-purple)' }}>
-          <span className="brutal-stat-label">✉️ ACTIVE APPS</span>
-          <span className="brutal-stat-value">{stats.activeApps}</span>
-        </div>
-        <div className="brutal-stat-card" style={{ backgroundColor: 'var(--brutal-mint)' }}>
-          <span className="brutal-stat-label">💰 AVG STIPEND</span>
-          <span className="brutal-stat-value">₹{stats.avgStipend.toLocaleString('en-IN')}/m</span>
-        </div>
-      </section>
+      {/* Neo-Brutalist Navigation Bar */}
+      <nav style={{ display: 'flex', gap: '16px', marginBottom: '32px', flexWrap: 'wrap' }}>
+        <button 
+          onClick={() => setCurrentTab('board')}
+          className="brutal-btn"
+          style={{ 
+            backgroundColor: currentTab === 'board' ? 'var(--brutal-yellow)' : '#fff',
+            boxShadow: currentTab === 'board' ? 'var(--brutal-shadow-active)' : 'var(--brutal-shadow)',
+            transform: currentTab === 'board' ? 'translate(2px, 2px)' : 'none',
+            fontSize: '14px',
+            padding: '10px 20px'
+          }}
+        >
+          📋 BOARD TRACKER
+        </button>
+        <button 
+          onClick={() => setCurrentTab('ats')}
+          className="brutal-btn"
+          style={{ 
+            backgroundColor: currentTab === 'ats' ? 'var(--brutal-yellow)' : '#fff',
+            boxShadow: currentTab === 'ats' ? 'var(--brutal-shadow-active)' : 'var(--brutal-shadow)',
+            transform: currentTab === 'ats' ? 'translate(2px, 2px)' : 'none',
+            fontSize: '14px',
+            padding: '10px 20px'
+          }}
+          id="ats-tab-btn"
+        >
+          🎯 ATS RESUME MATCHER & DOCUMENT JAR
+        </button>
+      </nav>
 
-      {/* Filters Bar */}
-      <section className="brutal-controls-bar">
-        <div className="brutal-search-wrapper">
-          <input 
-            type="text" 
-            placeholder={isSearching ? "⏳ SEARCHING SEMANTICALLY..." : "🔍 SEARCH ROLES, COMPANIES, OR KEYWORD TAGS..."} 
-            className="brutal-input"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            id="search-input"
-            style={{ border: isSearching ? '4px solid var(--brutal-yellow)' : 'var(--brutal-border)' }}
-          />
-        </div>
-        <div className="brutal-filters">
-          <label className="brutal-checkbox-label" id="shortlist-toggle-label">
-            <input 
-              type="checkbox" 
-              className="brutal-checkbox" 
-              checked={shortlistedOnly}
-              onChange={(e) => setShortlistedOnly(e.target.checked)}
-              id="shortlist-toggle"
-            />
-            Shortlisted Only
-          </label>
-          <div className="brutal-select-wrapper">
-            <select 
-              className="brutal-select"
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
-              id="sort-select"
-            >
-              <option value="score">SORT BY SCORE (MAX)</option>
-              <option value="stipend">SORT BY STIPEND (MAX)</option>
-              <option value="date">SORT BY DATE SCRAPED</option>
-            </select>
-          </div>
-        </div>
-      </section>
-
-      {/* Layout Flex Wrapper for Sidebar + Board */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', position: 'relative', width: '100%' }}>
-        
-        {/* Collapsible Resume Sidebar */}
-        <aside className={`brutal-resume-sidebar ${isSidebarOpen ? '' : 'collapsed'}`}>
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            width: '100%', 
-            borderBottom: isSidebarOpen ? '2px solid #000' : 'none', 
-            paddingBottom: isSidebarOpen ? '8px' : '0' 
-          }}>
-            {isSidebarOpen && <h2 style={{ fontSize: '18px', margin: 0 }}>📄 MY RESUME</h2>}
-            <button 
-              onClick={() => setIsSidebarOpen(prev => !prev)}
-              className="brutal-sidebar-toggle"
-              style={{ width: isSidebarOpen ? 'auto' : '100%', display: 'flex', justifyContent: 'center' }}
-            >
-              {isSidebarOpen ? '◀' : '📄'}
-            </button>
-          </div>
-          
-          {isSidebarOpen ? (
-            <>
-              <p style={{ fontSize: '12px', fontWeight: '800', fontStyle: 'italic', marginTop: '8px' }}>
-                Paste your resume text here to analyze ATS keyword match score & skill gaps against scraped roles!
-              </p>
-              <textarea 
-                className="brutal-resume-textarea"
-                placeholder="Paste your plain text resume here..."
-                value={resumeText}
-                onChange={(e) => {
-                  setResumeText(e.target.value);
-                  localStorage.setItem('my_resume', e.target.value);
-                }}
-              />
-              <button 
-                onClick={handleBatchScore}
-                className="brutal-btn"
-                style={{ width: '100%', backgroundColor: 'var(--brutal-yellow)' }}
-                disabled={isBatchScoring || !resumeText.trim()}
-              >
-                {isBatchScoring ? '⚡ MATCHING...' : '⚡ MATCH RESUME'}
-              </button>
-            </>
-          ) : (
-            <div style={{ 
-              writingMode: 'vertical-rl', 
-              textTransform: 'uppercase', 
-              fontWeight: '900', 
-              fontSize: '14px', 
-              paddingTop: '12px', 
-              fontFamily: 'var(--font-mono)', 
-              color: '#666' 
-            }}>
-              📄 RESUME DRAWER
+      {currentTab === 'board' ? (
+        <>
+          {/* Metrics Row */}
+          <section className="brutal-stats-grid">
+            <div className="brutal-stat-card" style={{ backgroundColor: 'var(--brutal-sky)' }}>
+              <span className="brutal-stat-label">📁 TOTAL SCRAPED</span>
+              <span className="brutal-stat-value">{stats.totalCount}</span>
             </div>
-          )}
-        </aside>
+            <div className="brutal-stat-card" style={{ backgroundColor: 'var(--brutal-yellow)' }}>
+              <span className="brutal-stat-label">⭐ SHORTLISTED</span>
+              <span className="brutal-stat-value">{stats.shortlistedCount}</span>
+            </div>
+            <div className="brutal-stat-card" style={{ backgroundColor: 'var(--brutal-purple)' }}>
+              <span className="brutal-stat-label">✉️ ACTIVE APPS</span>
+              <span className="brutal-stat-value">{stats.activeApps}</span>
+            </div>
+            <div className="brutal-stat-card" style={{ backgroundColor: 'var(--brutal-mint)' }}>
+              <span className="brutal-stat-label">💰 AVG STIPEND</span>
+              <span className="brutal-stat-value">₹{stats.avgStipend.toLocaleString('en-IN')}/m</span>
+            </div>
+          </section>
 
-        {/* Kanban Board Container */}
-        <main className="brutal-board-container" style={{ flex: 1 }}>
-          {COLUMNS.map(col => {
-            const colListings = kanbanGroups[col.key] || [];
-            return (
-              <div 
-                key={col.key} 
-                className="brutal-column"
-                style={{ borderTop: `16px solid ${col.color}` }}
-              >
-                {/* Column Header */}
-                <div className="brutal-column-header">
-                  <span className="brutal-column-title">
-                    {col.emoji} {col.label}
-                  </span>
-                  <span className="brutal-column-count">
-                    {colListings.length}
-                  </span>
+          {/* Filters Bar */}
+          <section className="brutal-controls-bar">
+            <div className="brutal-search-wrapper">
+              <input 
+                type="text" 
+                placeholder={isSearching ? "⏳ SEARCHING SEMANTICALLY..." : "🔍 SEARCH ROLES, COMPANIES, OR KEYWORD TAGS..."} 
+                className="brutal-input"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                id="search-input"
+                style={{ border: isSearching ? '4px solid var(--brutal-yellow)' : 'var(--brutal-border)' }}
+              />
+            </div>
+            <div className="brutal-filters">
+              <label className="brutal-checkbox-label" id="shortlist-toggle-label">
+                <input 
+                  type="checkbox" 
+                  className="brutal-checkbox" 
+                  checked={shortlistedOnly}
+                  onChange={(e) => setShortlistedOnly(e.target.checked)}
+                  id="shortlist-toggle"
+                />
+                Shortlisted Only
+              </label>
+              <div className="brutal-select-wrapper">
+                <select 
+                  className="brutal-select"
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  id="sort-select"
+                >
+                  <option value="score">SORT BY SCORE (MAX)</option>
+                  <option value="stipend">SORT BY STIPEND (MAX)</option>
+                  <option value="date">SORT BY DATE SCRAPED</option>
+                </select>
+              </div>
+            </div>
+          </section>
+
+          {/* Kanban Board Container (Full Width) */}
+          <main className="brutal-board-container" style={{ width: '100%' }}>
+            {COLUMNS.map(col => {
+              const colListings = kanbanGroups[col.key] || [];
+              return (
+                <div 
+                  key={col.key} 
+                  className="brutal-column"
+                  style={{ borderTop: `16px solid ${col.color}` }}
+                >
+                  {/* Column Header */}
+                  <div className="brutal-column-header">
+                    <span className="brutal-column-title">
+                      {col.emoji} {col.label}
+                    </span>
+                    <span className="brutal-column-count">
+                      {colListings.length}
+                    </span>
+                  </div>
+                  
+                  {/* Column Body */}
+                  <div className="brutal-column-body">
+                    {colListings.length === 0 ? (
+                      <div className="brutal-empty-state">
+                        ⛔ COLUMN IS EMPTY // GET SCRAPING OR ADJUST FILTERS ⛔
+                      </div>
+                    ) : (
+                      colListings.map(listing => (
+                        <ListingCard 
+                          key={listing.id}
+                          listing={listing}
+                          onStatusChange={handleStatusChange}
+                          onDelete={handleDeleteListing}
+                          matchData={matchScores[listing.id]}
+                        />
+                      ))
+                    )}
+                  </div>
                 </div>
-                
-                {/* Column Body */}
-                <div className="brutal-column-body">
-                  {colListings.length === 0 ? (
-                    <div className="brutal-empty-state">
-                      ⛔ COLUMN IS EMPTY // GET SCRAPING OR ADJUST FILTERS ⛔
+              );
+            })}
+          </main>
+        </>
+      ) : (
+        /* 🎯 ATS Resume Matcher & Document Jar Page */
+        <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-start', flexWrap: 'wrap', width: '100%', marginBottom: '40px' }}>
+          
+          {/* 🫙 Left Column: Document Jar */}
+          <div style={{ flex: '1', minWidth: '350px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className="brutal-card" style={{ backgroundColor: 'var(--brutal-mint)' }}>
+              <h2 style={{ fontSize: '22px', marginBottom: '8px', textShadow: '1px 1px 0px #fff' }}>🫙 THE DOCUMENT JAR</h2>
+              <p style={{ fontSize: '13px', fontWeight: '800', fontStyle: 'italic', marginBottom: '16px', lineHeight: '1.4' }}>
+                Store multiple resumes or profiles. Switch between them instantly to score compatibility across all roles!
+              </p>
+
+              {/* Add New Document Form / Trigger */}
+              {isAddingDoc ? (
+                <div style={{ border: 'var(--brutal-border-thin)', padding: '16px', backgroundColor: '#fff', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '14px', marginBottom: '12px' }}>➕ NEW RESUME PROFILE</h3>
+                  <input 
+                    type="text"
+                    placeholder="Profile Name (e.g. ML Resume)"
+                    className="brutal-input"
+                    style={{ marginBottom: '12px', padding: '8px', fontSize: '12px' }}
+                    value={newDocTitle}
+                    onChange={(e) => setNewDocTitle(e.target.value)}
+                  />
+                  <textarea 
+                    className="brutal-resume-textarea"
+                    placeholder="Paste plain text resume content here..."
+                    style={{ height: '140px', marginBottom: '12px', fontSize: '11px' }}
+                    value={newDocContent}
+                    onChange={(e) => setNewDocContent(e.target.value)}
+                  />
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button 
+                      onClick={() => {
+                        if (!newDocTitle.trim() || !newDocContent.trim()) return;
+                        const newDoc = {
+                          id: 'doc-' + Date.now(),
+                          title: newDocTitle.trim(),
+                          content: newDocContent.trim()
+                        };
+                        setDocumentJar(prev => [...prev, newDoc]);
+                        setActiveDocId(newDoc.id);
+                        setNewDocTitle('');
+                        setNewDocContent('');
+                        setIsAddingDoc(false);
+                      }}
+                      className="brutal-btn"
+                      style={{ backgroundColor: 'var(--brutal-green)', flex: 1, fontSize: '11px', padding: '6px' }}
+                    >
+                      💾 SAVE TO JAR
+                    </button>
+                    <button 
+                      onClick={() => setIsAddingDoc(false)}
+                      className="brutal-btn"
+                      style={{ backgroundColor: 'var(--brutal-red)', flex: 1, fontSize: '11px', padding: '6px' }}
+                    >
+                      ❌ CANCEL
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button 
+                  onClick={() => setIsAddingDoc(true)}
+                  className="brutal-btn"
+                  style={{ width: '100%', backgroundColor: '#fff', marginBottom: '16px', fontSize: '12px', padding: '10px' }}
+                >
+                  ➕ ADD NEW DOCUMENT TO JAR
+                </button>
+              )}
+
+              {/* Document List */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {documentJar.map((doc) => {
+                  const isActive = doc.id === activeDocId;
+                  return (
+                    <div 
+                      key={doc.id}
+                      className="brutal-card"
+                      style={{ 
+                        backgroundColor: isActive ? '#ffffff' : '#f9f9f9',
+                        border: isActive ? '4px solid #000' : '2px solid #000',
+                        boxShadow: isActive ? '4px 4px 0px #000' : 'none',
+                        cursor: 'pointer',
+                        padding: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        transition: 'all 0.1s'
+                      }}
+                      onClick={() => setActiveDocId(doc.id)}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontWeight: '900', fontSize: '13px', textTransform: 'uppercase' }}>
+                          📄 {doc.title}
+                        </span>
+                        {isActive && (
+                          <span style={{ 
+                            backgroundColor: 'var(--brutal-yellow)', 
+                            border: '1px solid #000', 
+                            fontSize: '8px', 
+                            fontWeight: '900', 
+                            padding: '2px 6px',
+                            textTransform: 'uppercase'
+                          }}>
+                            ACTIVE
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Actions */}
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingDocId(doc.id);
+                            setEditDocTitle(doc.title);
+                            setEditDocContent(doc.content);
+                          }}
+                          className="brutal-btn"
+                          style={{ padding: '3px 8px', fontSize: '10px', backgroundColor: 'var(--brutal-sky)' }}
+                        >
+                          ✏️ EDIT
+                        </button>
+                        {documentJar.length > 1 && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Delete "${doc.title}" from the jar?`)) {
+                                const remaining = documentJar.filter(d => d.id !== doc.id);
+                                setDocumentJar(remaining);
+                                if (isActive) {
+                                  setActiveDocId(remaining[0].id);
+                                }
+                              }
+                            }}
+                            className="brutal-btn"
+                            style={{ padding: '3px 8px', fontSize: '10px', backgroundColor: 'var(--brutal-red)' }}
+                          >
+                            🗑️
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  ) : (
-                    colListings.map(listing => (
-                      <ListingCard 
-                        key={listing.id}
-                        listing={listing}
-                        onStatusChange={handleStatusChange}
-                        onDelete={handleDeleteListing}
-                        matchData={matchScores[listing.id]}
-                      />
-                    ))
-                  )}
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Document Editor (if a document is active & being edited) */}
+            {editingDocId && (
+              <div className="brutal-card" style={{ backgroundColor: '#fff' }}>
+                <h3 style={{ fontSize: '14px', marginBottom: '12px' }}>✏️ EDIT PROFILE: {editDocTitle}</h3>
+                <input 
+                  type="text"
+                  className="brutal-input"
+                  style={{ marginBottom: '12px', padding: '8px', fontSize: '12px' }}
+                  value={editDocTitle}
+                  onChange={(e) => setEditDocTitle(e.target.value)}
+                />
+                <textarea 
+                  className="brutal-resume-textarea"
+                  style={{ height: '200px', marginBottom: '12px', fontSize: '11px' }}
+                  value={editDocContent}
+                  onChange={(e) => setEditDocContent(e.target.value)}
+                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button 
+                    onClick={() => {
+                      if (!editDocTitle.trim() || !editDocContent.trim()) return;
+                      setDocumentJar(prev => prev.map(d => 
+                        d.id === editingDocId ? { ...d, title: editDocTitle.trim(), content: editDocContent.trim() } : d
+                      ));
+                      setEditingDocId(null);
+                    }}
+                    className="brutal-btn"
+                    style={{ backgroundColor: 'var(--brutal-green)', flex: 1, fontSize: '12px' }}
+                  >
+                    💾 UPDATE
+                  </button>
+                  <button 
+                    onClick={() => setEditingDocId(null)}
+                    className="brutal-btn"
+                    style={{ backgroundColor: 'var(--brutal-orange)', flex: 1, fontSize: '12px' }}
+                  >
+                    ❌ CANCEL
+                  </button>
                 </div>
               </div>
-            );
-          })}
-        </main>
-      </div>
+            )}
+
+            {/* Active Document Full Preview (if not editing) */}
+            {!editingDocId && activeResumeText && (
+              <div className="brutal-card" style={{ backgroundColor: '#fff' }}>
+                <h3 style={{ fontSize: '14px', borderBottom: '2px solid #000', paddingBottom: '6px', marginBottom: '12px' }}>
+                  🔍 ACTIVE RESUME TEXT PREVIEW
+                </h3>
+                <pre style={{ 
+                  fontFamily: 'var(--font-mono)', 
+                  fontSize: '11px', 
+                  backgroundColor: '#f5f5f5', 
+                  padding: '12px', 
+                  border: '1px solid #000', 
+                  maxHeight: '180px', 
+                  overflowY: 'auto',
+                  whiteSpace: 'pre-wrap'
+                }}>
+                  {activeResumeText}
+                </pre>
+              </div>
+            )}
+          </div>
+
+          {/* ⚡ Right Column: ATS Match Score Board */}
+          <div style={{ flex: '2', minWidth: '450px', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div className="brutal-card" style={{ backgroundColor: 'var(--brutal-sky)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                <div>
+                  <h2 style={{ fontSize: '24px', textShadow: '1px 1px 0px #fff' }}>⚡ ATS COMPATIBILITY LEADERBOARD</h2>
+                  <p style={{ fontWeight: '800', marginTop: '4px', textTransform: 'uppercase', fontSize: '12px' }}>
+                    Active Profile: <span style={{ textDecoration: 'underline' }}>{documentJar.find(d => d.id === activeDocId)?.title}</span>
+                  </p>
+                </div>
+                <button 
+                  onClick={handleBatchScore}
+                  className="brutal-btn"
+                  style={{ backgroundColor: 'var(--brutal-yellow)', fontSize: '13px', padding: '8px 16px' }}
+                  disabled={isBatchScoring || !activeResumeText.trim()}
+                >
+                  {isBatchScoring ? '⚡ BATCH SCORING BOARD...' : '⚡ BATCH SCORE BOARD'}
+                </button>
+              </div>
+
+              {/* stats row */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '20px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '120px', backgroundColor: '#fff', border: 'var(--brutal-border-thin)', padding: '8px 12px' }}>
+                  <div style={{ fontSize: '9px', fontWeight: '900', color: '#666' }}>ROLES SCORABLE</div>
+                  <div style={{ fontSize: '22px', fontWeight: '900' }}>{filteredListings.length}</div>
+                </div>
+                <div style={{ flex: 1, minWidth: '120px', backgroundColor: '#fff', border: 'var(--brutal-border-thin)', padding: '8px 12px' }}>
+                  <div style={{ fontSize: '9px', fontWeight: '900', color: '#666' }}>SCORED</div>
+                  <div style={{ fontSize: '22px', fontWeight: '900' }}>
+                    {filteredListings.filter(l => matchScores[l.id]).length}
+                  </div>
+                </div>
+                <div style={{ flex: 1, minWidth: '120px', backgroundColor: '#fff', border: 'var(--brutal-border-thin)', padding: '8px 12px' }}>
+                  <div style={{ fontSize: '9px', fontWeight: '900', color: '#666' }}>STRONG MATCHES (70%+)</div>
+                  <div style={{ fontSize: '22px', fontWeight: '900', color: '#16a34a' }}>
+                    {filteredListings.filter(l => matchScores[l.id] && matchScores[l.id].score >= 70).length}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* List of Scored Listings */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              {filteredListings.length === 0 ? (
+                <div className="brutal-empty-state">
+                  ⛔ NO ROLES MATCHING ACTIVE FILTERS OR SEARCH TERMS ⛔
+                </div>
+              ) : (
+                filteredListings.map(listing => {
+                  const match = matchScores[listing.id];
+                  return (
+                    <div 
+                      key={listing.id}
+                      className="brutal-card"
+                      style={{ 
+                        backgroundColor: '#ffffff',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '12px',
+                        padding: '16px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '12px', flexWrap: 'wrap' }}>
+                        <div>
+                          <h3 style={{ fontSize: '16px', margin: 0 }}>{listing.title}</h3>
+                          <span style={{ fontSize: '12px', fontWeight: '800', textTransform: 'uppercase', color: '#666' }}>
+                            🏢 {listing.company} • 💸 {listing.stipend > 0 ? `₹${listing.stipend.toLocaleString('en-IN')}/m` : 'Stipend Not Listed'}
+                          </span>
+                        </div>
+                        
+                        {/* Score Pill */}
+                        {match ? (
+                          <div 
+                            style={{ 
+                              backgroundColor: match.score >= 70 ? 'var(--brutal-green)' : match.score >= 40 ? 'var(--brutal-yellow)' : 'var(--brutal-red)',
+                              border: 'var(--brutal-border-thin)',
+                              padding: '6px 12px',
+                              fontWeight: '900',
+                              fontSize: '12px',
+                              fontFamily: 'var(--font-mono)',
+                              boxShadow: '2px 2px 0px #000'
+                            }}
+                          >
+                            🎯 MATCH: {match.score}%
+                          </div>
+                        ) : (
+                          <div 
+                            style={{ 
+                              backgroundColor: '#e5e7eb',
+                              border: 'var(--brutal-border-thin)',
+                              padding: '6px 12px',
+                              fontWeight: '800',
+                              fontSize: '11px',
+                              color: '#666'
+                            }}
+                          >
+                            NOT ANALYZED
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Matching breakdown details */}
+                      {match ? (
+                        <div style={{ 
+                          backgroundColor: '#fafafa', 
+                          border: '1px dashed #000', 
+                          padding: '12px', 
+                          fontSize: '11px', 
+                          fontFamily: 'var(--font-mono)',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '6px',
+                          lineHeight: '1.4'
+                        }}>
+                          <div>✅ <strong>MATCHING SKILLS:</strong> {match.gapAnalysis.matchingSkills.join(', ') || 'None identified'}</div>
+                          <div>❌ <strong>MISSING SKILLS:</strong> {match.gapAnalysis.missingSkills.join(', ') || 'None identified'}</div>
+                          <div style={{ fontWeight: '800', borderTop: '1px solid #ddd', paddingTop: '6px', marginTop: '4px', fontStyle: 'italic' }}>
+                            💬 VERDICT: {match.gapAnalysis.verdict}
+                          </div>
+                        </div>
+                      ) : (
+                        <p style={{ fontSize: '11px', fontStyle: 'italic', color: '#777', margin: 0 }}>
+                          Click the "Batch Score Board" button above to run compatibility analysis against your active resume.
+                        </p>
+                      )}
+
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '4px' }}>
+                        <a 
+                          href={listing.apply_url || '#'} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="brutal-btn"
+                          style={{ padding: '6px 12px', fontSize: '10px', backgroundColor: 'var(--brutal-orange)' }}
+                        >
+                          Apply ↗
+                        </a>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
