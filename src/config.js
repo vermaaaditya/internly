@@ -15,7 +15,7 @@ const config = {
   domains: ["AI", "ML", "web", "fullstack", "software"],
 
   // Maximum cumulative scraped/stored results per cycle
-  maxResults: parseInt(process.env.MAX_RESULTS || "50", 10),
+  maxResults: parseInt(process.env.MAX_RESULTS || "100", 10),
 
   // Supabase Database Sync configuration
   supabaseUrl: process.env.SUPABASE_URL || "",
