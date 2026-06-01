@@ -58,9 +58,22 @@ function parseSimplifyMarkdown(markdown) {
         }
       });
 
-      // remote check
-      const isRemote = location.toLowerCase().includes('remote') || 
-                       title.toLowerCase().includes('remote');
+      // remote check (exclude US/Canada restrictions unless it explicitly says India or Worldwide)
+      let isRemote = false;
+      const locLower = location.toLowerCase();
+      const titleLower = title.toLowerCase();
+      
+      const hasRemoteKeyword = locLower.includes('remote') || titleLower.includes('remote');
+      const hasUSRestriction = locLower.includes('usa') || locLower.includes('in usa') || locLower.includes('canada') || locLower.includes(', us') || locLower.includes(', ca') || locLower.includes(', fl') || locLower.includes(', ma') || locLower.includes(', ny') || locLower.includes(', tx') || locLower.includes(', wa') || locLower.includes(', or');
+      const hasIndiaOrGlobal = locLower.includes('india') || locLower.includes('worldwide') || locLower.includes('global') || locLower.includes('anywhere');
+      
+      if (hasRemoteKeyword) {
+        if (hasUSRestriction && !hasIndiaOrGlobal) {
+          isRemote = false; // Exclude US-only remote
+        } else {
+          isRemote = true;
+        }
+      }
 
       if (title && applyUrl) {
         listings.push({
