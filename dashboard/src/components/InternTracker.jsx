@@ -778,6 +778,71 @@ export default function InternTracker() {
               {isAddingDoc ? (
                 <div style={{ border: 'var(--brutal-border-thin)', padding: '16px', backgroundColor: '#fff', marginBottom: '16px' }}>
                   <h3 style={{ fontSize: '14px', marginBottom: '12px' }}>➕ NEW RESUME PROFILE</h3>
+                  
+                  {/* Drag & Drop Upload Container */}
+                  <div 
+                    style={{
+                      border: '2px dashed #000',
+                      padding: '18px 10px',
+                      textAlign: 'center',
+                      backgroundColor: '#f9f9f9',
+                      cursor: 'pointer',
+                      marginBottom: '16px',
+                      transition: 'all 0.1s'
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.style.backgroundColor = 'var(--brutal-sky)';
+                    }}
+                    onDragLeave={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.style.backgroundColor = '#f9f9f9';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.style.backgroundColor = '#f9f9f9';
+                      const file = e.dataTransfer.files[0];
+                      if (file && (file.type === "text/plain" || file.name.endsWith(".txt"))) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          setNewDocTitle(file.name.replace(/\.[^/.]+$/, ""));
+                          setNewDocContent(event.target.result);
+                        };
+                        reader.readAsText(file);
+                      } else {
+                        alert("Please upload a plain text (.txt) resume file.");
+                      }
+                    }}
+                    onClick={() => {
+                      document.getElementById('brutal-file-input').click();
+                    }}
+                  >
+                    <span style={{ fontSize: '24px', display: 'block', marginBottom: '4px' }}>📤</span>
+                    <span style={{ fontWeight: '900', fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>
+                      Drag & Drop Resume (.txt)
+                    </span>
+                    <span style={{ fontSize: '9px', color: '#666', fontWeight: '800' }}>
+                      or click to browse files
+                    </span>
+                    <input 
+                      type="file" 
+                      id="brutal-file-input" 
+                      accept=".txt" 
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            setNewDocTitle(file.name.replace(/\.[^/.]+$/, ""));
+                            setNewDocContent(event.target.result);
+                          };
+                          reader.readAsText(file);
+                        }
+                      }}
+                    />
+                  </div>
+
                   <input 
                     type="text"
                     placeholder="Profile Name (e.g. ML Resume)"
