@@ -138,6 +138,11 @@ function ListingCard({ listing, onStatusChange }) {
           target="_blank" 
           rel="noopener noreferrer"
           className="brutal-btn brutal-btn-apply"
+          onClick={() => {
+            if (currentStatus === 'pending') {
+              onStatusChange(listing.id, 'applied');
+            }
+          }}
         >
           Apply ↗
         </a>
