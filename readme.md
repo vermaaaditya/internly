@@ -9,7 +9,7 @@
 ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░ ░▒▓█▓▒░   ░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░     
 ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░ ░▒▓█▓▒░   ░▒▓████████▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓████████▓▒░▒▓█▓▒░     
                                                                                                
-                                                                                               ```
+ ```
 
 **Internly** is a high-octane, automated scraping pipeline and interactive Kanban board designed to capture, score, and track software engineering and AI/ML internships. It filters out the noise, eliminates full-time commitment traps, and syncs pristine listings straight to a custom **Neo-Brutalist** dashboard.
 
