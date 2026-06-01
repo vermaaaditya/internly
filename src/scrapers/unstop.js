@@ -140,34 +140,8 @@ function parseUnstopHTML(html) {
  */
 async function scrapeUnstop() {
   logger.header('Unstop Scraper');
-  logger.info(`Fetching: ${UNSTOP_URL}`);
-
-  try {
-    const response = await axios.get(UNSTOP_URL, {
-      headers: HEADERS,
-      timeout: 10000,
-      maxRedirects: 3
-    });
-
-    if (response.status !== 200) {
-      logger.warn(`Unstop returned status ${response.status}. Falling back to simulations.`);
-      return SIMULATED_UNSTOP_OPPORTUNITIES;
-    }
-
-    const listings = parseUnstopHTML(response.data);
-
-    if (listings.length === 0) {
-      logger.info('Unstop returned 0 listings (Dynamic Client-Side Render). Hydrating premium Simulated Opportunities...');
-      return SIMULATED_UNSTOP_OPPORTUNITIES;
-    }
-
-    logger.success(`Unstop scraping complete. Collected ${listings.length} listings.`);
-    return listings;
-  } catch (err) {
-    const status = err.response ? err.response.status : 'NETWORK_ERROR';
-    logger.warn(`Unstop fetch failed [${status}]: ${err.message}. Triggering active fallback simulation.`);
-    return SIMULATED_UNSTOP_OPPORTUNITIES;
-  }
+  logger.warn('Unstop scraper is disabled — challenges and competitions are excluded.');
+  return [];
 }
 
 module.exports = { scrapeUnstop };
