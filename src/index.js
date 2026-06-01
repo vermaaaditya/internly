@@ -24,7 +24,7 @@ const { scrapeInternshala } = require('./scrapers/internshala');
 const { scrapeWellfound } = require('./scrapers/wellfound');
 const { scrapeLinkedin } = require('./scrapers/linkedin');
 const { scrapeUnstop } = require('./scrapers/unstop');
-const { scrapeCutshort } = require('./scrapers/cutshort');
+const { scrapeSimplify } = require('./scrapers/simplify');
 
 /**
  * Runs the full scraping pipeline end-to-end.
@@ -44,10 +44,10 @@ async function runPipeline() {
     scrapeWellfound(),
     scrapeLinkedin(config.keywords),
     scrapeUnstop(),
-    scrapeCutshort()
+    scrapeSimplify()
   ]);
 
-  const scraperNames = ['Internshala', 'Wellfound', 'LinkedIn', 'Unstop', 'Cutshort'];
+  const scraperNames = ['Internshala', 'Wellfound', 'LinkedIn', 'Unstop', 'Simplify'];
   const allRaw = [];
   const errors = [];
 

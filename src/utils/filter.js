@@ -58,6 +58,11 @@ function computeScore(listing, config) {
   }
   // If config.remoteOnly is false, we skip this check entirely (no penalty or bonus)
 
+  // --- Curated Source Bonus (+2) ---
+  if (listing.source === 'simplify') {
+    score += 2;
+  }
+
   // --- Student / Full-Time Blacklist Check (-4 penalty) ---
   const blacklist = [
     "full time", "full-time", "immediate joiner", 
