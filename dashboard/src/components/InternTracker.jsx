@@ -14,7 +14,8 @@ const COLUMNS = [
   { key: 'pending',   label: 'Shortlisted', emoji: '⭐', color: 'var(--brutal-yellow)' },
   { key: 'applied',   label: 'Applied',      emoji: '📨', color: 'var(--brutal-purple)' },
   { key: 'replied',   label: 'Replied',      emoji: '💬', color: 'var(--brutal-mint)' },
-  { key: 'interview', label: 'Interview',    emoji: '🎤', color: 'var(--brutal-pink)' }
+  { key: 'interview', label: 'Interview',    emoji: '🎤', color: 'var(--brutal-pink)' },
+  { key: 'rejected',  label: 'Rejected',     emoji: '❌', color: 'var(--brutal-red)' }
 ];
 
 const STATUS_OPTIONS = ['pending', 'applied', 'replied', 'interview', 'rejected'];
