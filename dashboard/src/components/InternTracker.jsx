@@ -85,7 +85,7 @@ const MOCK_LISTINGS = [
 ];
 
 // ── Card Component ───────────────────────────────────────────────────────────
-function ListingCard({ listing, onStatusChange }) {
+function ListingCard({ listing, onStatusChange, onDelete }) {
   const stipendDisplay = listing.stipend > 0
     ? `₹${listing.stipend.toLocaleString('en-IN')}/month`
     : 'Stipend Not Listed';
@@ -102,8 +102,29 @@ function ListingCard({ listing, onStatusChange }) {
 
   return (
     <div className="brutal-card">
-      {/* Title */}
-      <h3 className="brutal-card-title">{listing.title}</h3>
+      {/* Title & Delete Row */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px', marginBottom: '4px' }}>
+        <h3 className="brutal-card-title" style={{ flex: 1, margin: 0 }}>{listing.title}</h3>
+        <button 
+          onClick={() => onDelete(listing.id)}
+          style={{
+            background: 'var(--brutal-pink)',
+            border: 'var(--brutal-border-thin)',
+            boxShadow: '2px 2px 0px #000',
+            cursor: 'pointer',
+            padding: '4px 6px',
+            fontSize: '12px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transform: 'translateY(-2px)'
+          }}
+          title="Delete Listing"
+          className="brutal-btn-delete"
+        >
+          🗑️
+        </button>
+      </div>
       
       {/* Company Name */}
       <div>
@@ -277,6 +298,33 @@ export default function InternTracker() {
       ));
     }
   }, [isDemoMode]);
+
+  // Handle delete listing
+  const handleDeleteListing = useCallback(async (listingId) => {
+    if (!window.confirm("Are you sure you want to delete this listing permanently?")) {
+      return;
+    }
+
+    // Optimistic UI Update
+    setListings(prev => prev.filter(l => l.id !== listingId));
+
+    if (isDemoMode || !supabase) {
+      console.log(`Demo Mode: Deleted listing ${listingId}`);
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('listings')
+        .delete()
+        .eq('id', listingId);
+
+      if (error) throw error;
+    } catch (err) {
+      console.error('Failed to delete listing:', err);
+      fetchListings();
+    }
+  }, [isDemoMode, fetchListings]);
 
   // Filter & Sort Pipeline
   const filteredListings = useMemo(() => {
@@ -475,6 +523,7 @@ export default function InternTracker() {
                       key={listing.id}
                       listing={listing}
                       onStatusChange={handleStatusChange}
+                      onDelete={handleDeleteListing}
                     />
                   ))
                 )}

@@ -102,8 +102,14 @@ function computeScore(listing, config) {
 function scoreAndFilter(listings, config) {
   if (!Array.isArray(listings)) return [];
 
-  // 1. Score each listing
-  const scored = listings.map(listing => {
+  // 1. Strictly filter out non-remote listings if remoteOnly is configured
+  let targetListings = listings;
+  if (config.remoteOnly) {
+    targetListings = listings.filter(l => l.isRemote);
+  }
+
+  // 2. Score each listing
+  const scored = targetListings.map(listing => {
     const score = computeScore(listing, config);
     return {
       ...listing,
