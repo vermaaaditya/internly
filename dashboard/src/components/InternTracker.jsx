@@ -802,15 +802,37 @@ export default function InternTracker() {
                       e.preventDefault();
                       e.currentTarget.style.backgroundColor = '#f9f9f9';
                       const file = e.dataTransfer.files[0];
-                      if (file && (file.type === "text/plain" || file.name.endsWith(".txt"))) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                          setNewDocTitle(file.name.replace(/\.[^/.]+$/, ""));
-                          setNewDocContent(event.target.result);
-                        };
-                        reader.readAsText(file);
-                      } else {
-                        alert("Please upload a plain text (.txt) resume file.");
+                      if (file) {
+                        const fileExt = file.name.split('.').pop().toLowerCase();
+                        if (fileExt === 'txt') {
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            setNewDocTitle(file.name.replace(/\.[^/.]+$/, ""));
+                            setNewDocContent(event.target.result);
+                          };
+                          reader.readAsText(file);
+                        } else if (fileExt === 'docx') {
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                            const arrayBuffer = event.target.result;
+                            if (window.mammoth) {
+                              window.mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+                                .then((result) => {
+                                  setNewDocTitle(file.name.replace(/\.[^/.]+$/, ""));
+                                  setNewDocContent(result.value);
+                                })
+                                .catch((err) => {
+                                  console.error("Mammoth parser error:", err);
+                                  alert("Failed to parse Word (.docx) file.");
+                                });
+                            } else {
+                              alert("Mammoth library loading. Please wait a second and retry!");
+                            }
+                          };
+                          reader.readAsArrayBuffer(file);
+                        } else {
+                          alert("Please upload a plain text (.txt) or Word Document (.docx) resume file.");
+                        }
                       }
                     }}
                     onClick={() => {
@@ -819,7 +841,7 @@ export default function InternTracker() {
                   >
                     <span style={{ fontSize: '24px', display: 'block', marginBottom: '4px' }}>📤</span>
                     <span style={{ fontWeight: '900', fontSize: '11px', display: 'block', textTransform: 'uppercase' }}>
-                      Drag & Drop Resume (.txt)
+                      Drag & Drop Resume (.txt, .docx)
                     </span>
                     <span style={{ fontSize: '9px', color: '#666', fontWeight: '800' }}>
                       or click to browse files
@@ -827,17 +849,41 @@ export default function InternTracker() {
                     <input 
                       type="file" 
                       id="brutal-file-input" 
-                      accept=".txt" 
+                      accept=".txt,.docx" 
                       style={{ display: 'none' }}
                       onChange={(e) => {
                         const file = e.target.files[0];
                         if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            setNewDocTitle(file.name.replace(/\.[^/.]+$/, ""));
-                            setNewDocContent(event.target.result);
-                          };
-                          reader.readAsText(file);
+                          const fileExt = file.name.split('.').pop().toLowerCase();
+                          if (fileExt === 'txt') {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              setNewDocTitle(file.name.replace(/\.[^/.]+$/, ""));
+                              setNewDocContent(event.target.result);
+                            };
+                            reader.readAsText(file);
+                          } else if (fileExt === 'docx') {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                              const arrayBuffer = event.target.result;
+                              if (window.mammoth) {
+                                window.mammoth.extractRawText({ arrayBuffer: arrayBuffer })
+                                  .then((result) => {
+                                    setNewDocTitle(file.name.replace(/\.[^/.]+$/, ""));
+                                    setNewDocContent(result.value);
+                                  })
+                                  .catch((err) => {
+                                    console.error("Mammoth parser error:", err);
+                                    alert("Failed to parse Word (.docx) file.");
+                                  });
+                              } else {
+                                alert("Mammoth library loading. Please wait a second and retry!");
+                              }
+                            };
+                            reader.readAsArrayBuffer(file);
+                          } else {
+                            alert("Please upload a plain text (.txt) or Word Document (.docx) resume file.");
+                          }
                         }
                       }}
                     />
