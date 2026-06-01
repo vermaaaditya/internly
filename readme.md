@@ -1,4 +1,4 @@
-# 💥 INTERNLY // THE BRUTALIST INTERNSHIP TRACKER 💥
+# 💥 INTERNLY //
 
 ```
   ___ _  _ _____ ___ ___ _  _ _  __   __
